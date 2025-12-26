@@ -1,6 +1,7 @@
-import { doc, setDoc, collection, addDoc, getDoc, getDocs, arrayUnion } from 'firebase/firestore';
+import { doc, setDoc, collection, addDoc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import { Device, Schedule, AuditLog } from '../types/device';
+import { pushSchedule } from './esp32Service';
 
 const DEVICE_ID = 'feeder_001';
 
@@ -108,8 +109,19 @@ export const fetchSchedules = async (): Promise<Schedule[]> => {
  */
 export const addSchedule = async (time: string, amount: number): Promise<void> => {
   await ensureFeederExists();
+
+  // 1. Add to Firestore
   const schedulesRef = collection(doc(db, 'devices', DEVICE_ID), 'schedules');
-  await addDoc(schedulesRef, { time, amount, enabled: true } as Schedule);
+  const docRef = await addDoc(schedulesRef, { time, amount, enabled: true } as Schedule);
+
+  // 2. Push to ESP32 using esp32Service
+  try {
+    const [hh, mm] = time.split(':');
+    await pushSchedule(hh, mm, amount);
+    console.log('Schedule sent to ESP32 via esp32Service');
+  } catch (err) {
+    console.error('Failed to push schedule to ESP32:', err);
+  }
 };
 
 /**

@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Button, Modal, ActivityIndicator, Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { View, Text, StyleSheet, Button, Alert } from 'react-native';
+import { fetchSchedules, logCommand, canDispense } from '../../services/deviceService';
 import { sendServo, tareScale, fetchWeight } from '../../services/esp32Service';
-import { logCommand, canDispense } from '../../services/deviceService';
+import { Schedule } from '../../types/device';
 
 export default function ServoControlScreen() {
-  const [angle, setAngle] = useState(0);
   const [weight, setWeight] = useState(0);
-  const [connected, setConnected] = useState(false);
+  const [angle, setAngle] = useState(0);
+  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [firstCheckDone, setFirstCheckDone] = useState(false);
 
   // Poll ESP32 weight every second
@@ -16,34 +16,64 @@ export default function ServoControlScreen() {
       try {
         const w = await fetchWeight();
         setWeight(w);
-        setConnected(true);
-      } catch {
-        setConnected(false);
-      }
+      } catch {}
       setFirstCheckDone(true);
     }, 1000);
-
     return () => clearInterval(interval);
   }, []);
 
-  // Persist last angle locally
+  // Poll Firestore schedules every minute
   useEffect(() => {
-    AsyncStorage.setItem('@servo_angle', angle.toString());
-  }, [angle]);
+    const interval = setInterval(async () => {
+      try {
+        const sched = await fetchSchedules();
+        setSchedules(sched);
 
-  const handleServo = async (value: number) => {
+        const now = new Date();
+        const currentHHMM = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+        for (let s of sched) {
+          if (s.enabled && s.time === currentHHMM) {
+            const allowed = await canDispense();
+            if (!allowed) continue;
+
+            // Move servo
+            await sendServo(s.amount); // s.amount = 90 for dispense
+            setAngle(s.amount);
+            await logCommand('AUTO_DISPENSE', s.amount, weight);
+
+            // Return servo to 0 after 3 seconds
+            setTimeout(async () => {
+              await sendServo(0);
+              setAngle(0);
+              await logCommand('AUTO_CLOSE', 0, weight);
+            }, 3000);
+          }
+        }
+      } catch (err) {
+        console.error('Schedule check failed', err);
+      }
+    }, 60000); // every minute
+
+    return () => clearInterval(interval);
+  }, [weight]);
+
+  const handleManualDispense = async () => {
     try {
       const allowed = await canDispense();
-      if (!allowed) {
-        Alert.alert('Cannot dispense', 'Food already present or schedule not active.');
-        return;
-      }
+      if (!allowed) return Alert.alert('Cannot dispense', 'Food bowl already full or schedule blocked.');
 
-      setAngle(value);
-      await sendServo(value);
-      await logCommand('SET_SERVO', value, weight);
+      await sendServo(90);
+      setAngle(90);
+      await logCommand('MANUAL_DISPENSE', 90, weight);
+
+      setTimeout(async () => {
+        await sendServo(0);
+        setAngle(0);
+        await logCommand('MANUAL_CLOSE', 0, weight);
+      }, 3000);
     } catch (err) {
-      console.error('Servo command failed:', err);
+      console.error(err);
     }
   };
 
@@ -52,30 +82,19 @@ export default function ServoControlScreen() {
       await tareScale();
       await logCommand('TARE_SCALE', undefined, weight);
     } catch (err) {
-      console.error('Tare command failed:', err);
+      console.error(err);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Modal visible={!connected && firstCheckDone} transparent animationType="fade">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <ActivityIndicator size="large" color="#1EB1FC" />
-            <Text style={{ marginTop: 10 }}>
-              {connected ? 'Connected!' : 'Connecting to feeder...'}
-            </Text>
-          </View>
-        </View>
-      </Modal>
-
       <Text style={styles.title}>Food Dispenser Control</Text>
       <Text style={styles.text}>Weight: {weight.toFixed(2)} g</Text>
       <Text style={styles.text}>Servo Position: {angle}°</Text>
 
       <View style={styles.buttonRow}>
-        <Button title="CLOSE (0°)" onPress={() => handleServo(0)} />
-        <Button title="DISPENSE (90°)" onPress={() => handleServo(90)} />
+        <Button title="CLOSE (0°)" onPress={() => sendServo(0).then(() => setAngle(0))} />
+        <Button title="DISPENSE (90°)" onPress={handleManualDispense} />
       </View>
 
       <View style={{ marginTop: 20 }}>
@@ -86,10 +105,8 @@ export default function ServoControlScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   title: { fontSize: 26, marginBottom: 20 },
   text: { fontSize: 20, marginVertical: 10 },
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', width: 280, marginTop: 20 },
-  modalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000088' },
-  modalContent: { padding: 20, backgroundColor: 'white', borderRadius: 10, alignItems: 'center' },
 });

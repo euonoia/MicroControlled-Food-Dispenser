@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Button, FlatList, TextInput, StyleSheet, Alert } from 'react-native';
 import { Schedule as ScheduleType } from '../../types/device';
 import { fetchSchedules, addSchedule, toggleSchedule } from '../../services/deviceService';
+import { sendServo } from '../../services/esp32Service';
 
 export default function Schedule() {
   const [schedules, setSchedules] = useState<ScheduleType[]>([]);
@@ -21,15 +22,31 @@ export default function Schedule() {
   useEffect(() => { loadSchedules(); }, []);
 
   const handleAdd = async () => {
-    if (!timeInput.match(/^\d{2}:\d{2}$/)) return Alert.alert('Error', 'Enter HH:MM');
-    await addSchedule(timeInput, parseInt(amountInput));
-    setTimeInput(''); setAmountInput('90');
-    loadSchedules();
+    if (!timeInput.match(/^\d{2}:\d{2}$/)) {
+      return Alert.alert('Error', 'Enter HH:MM');
+    }
+
+    try {
+      await addSchedule(timeInput, parseInt(amountInput));
+      Alert.alert('Success', 'Schedule added and pushed to ESP32');
+
+      setTimeInput('');
+      setAmountInput('90');
+      loadSchedules();
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to add schedule');
+    }
   };
 
   const handleToggle = async (id: string, enabled: boolean) => {
-    await toggleSchedule(id, !enabled);
-    loadSchedules();
+    try {
+      await toggleSchedule(id, !enabled);
+      loadSchedules();
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to toggle schedule');
+    }
   };
 
   return (
@@ -37,8 +54,19 @@ export default function Schedule() {
       <Text style={styles.title}>Schedule Feeding</Text>
 
       <View style={styles.row}>
-        <TextInput value={timeInput} onChangeText={setTimeInput} placeholder="HH:MM" style={styles.input} />
-        <TextInput value={amountInput} onChangeText={setAmountInput} placeholder="Amount" keyboardType="numeric" style={styles.input} />
+        <TextInput
+          value={timeInput}
+          onChangeText={setTimeInput}
+          placeholder="HH:MM"
+          style={styles.input}
+        />
+        <TextInput
+          value={amountInput}
+          onChangeText={setAmountInput}
+          placeholder="Amount"
+          keyboardType="numeric"
+          style={styles.input}
+        />
         <Button title="Add" onPress={handleAdd} />
       </View>
 
