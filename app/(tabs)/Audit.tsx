@@ -19,7 +19,7 @@ const Audit = () => {
       const snapshot = await getDocs(q);
 
       const logs: AuditLog[] = snapshot.docs.map(doc => ({
-        id: doc.id, // ensure each log has an id
+        id: doc.id,
         ...(doc.data() as AuditLog),
       }));
 
@@ -35,25 +35,31 @@ const Audit = () => {
     fetchAuditLogs();
   }, []);
 
-  const renderItem: ListRenderItem<AuditLog> = ({ item }) => (
-    <View style={styles.logItem}>
-      <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleString()}</Text>
-      {item.command && <Text style={styles.command}>Command: {item.command}</Text>}
-      {item.angle !== undefined && <Text>Angle: {item.angle}</Text>}
-      {item.weight !== undefined && <Text>Weight: {item.weight}</Text>}
-      {item.message && <Text style={styles.message}>{item.message}</Text>}
-    </View>
-  );
+const renderItem: ListRenderItem<AuditLog> = ({ item }) => (
+  <View style={styles.logItem}>
+    <Text style={styles.timestamp}>{new Date(item.timestamp).toLocaleString()}</Text>
+
+    {item.command && (
+      <Text style={styles.command}>
+        {item.command.startsWith('AUTO_') ? 'Automatic' : 'Manual'} Command: {item.command.replace('_', ' ')}
+      </Text>
+    )}
+
+    {item.message && <Text style={styles.message}>{item.message}</Text>}
+
+    {item.angle !== undefined && <Text>Angle: {item.angle}°</Text>}
+
+    <Text>Weight: {item.weight != null ? item.weight.toFixed(2) + ' g' : '-'}</Text>
+  </View>
+);
 
   return (
     <View style={styles.container}>
       <FlatList<AuditLog>
         data={auditLogs}
-        keyExtractor={item => item.id ?? item.timestamp} // fallback if id missing
+        keyExtractor={item => item.id ?? item.timestamp}
         renderItem={renderItem}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={fetchAuditLogs} />
-        }
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchAuditLogs} />}
         ListEmptyComponent={
           <Text style={styles.empty}>
             {loading ? 'Loading audit logs...' : 'No audit logs found.'}

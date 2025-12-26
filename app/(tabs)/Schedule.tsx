@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Button, FlatList, TextInput, StyleSheet, Alert } from 'react-native';
 import { Schedule as ScheduleType } from '../../types/device';
-import { fetchSchedules, addSchedule, toggleSchedule } from '../../services/deviceService';
-import { sendServo } from '../../services/esp32Service';
+import { fetchSchedules, addSchedule, toggleSchedule, deleteSchedule } from '../../services/deviceService';
 
 export default function Schedule() {
   const [schedules, setSchedules] = useState<ScheduleType[]>([]);
@@ -29,7 +28,6 @@ export default function Schedule() {
     try {
       await addSchedule(timeInput, parseInt(amountInput));
       Alert.alert('Success', 'Schedule added and pushed to ESP32');
-
       setTimeInput('');
       setAmountInput('90');
       loadSchedules();
@@ -47,6 +45,27 @@ export default function Schedule() {
       console.error(err);
       Alert.alert('Error', 'Failed to toggle schedule');
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    Alert.alert(
+      'Delete Schedule',
+      'Are you sure you want to delete this schedule?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            try {
+              await deleteSchedule(id);
+              loadSchedules();
+            } catch (err) {
+              console.error(err);
+              Alert.alert('Error', 'Failed to delete schedule');
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (
@@ -76,7 +95,17 @@ export default function Schedule() {
         renderItem={({ item }) => (
           <View style={styles.scheduleRow}>
             <Text>{item.time} - {item.amount}° - {item.enabled ? 'Active' : 'Disabled'}</Text>
-            <Button title={item.enabled ? 'Disable' : 'Enable'} onPress={() => handleToggle(item.id!, item.enabled)} />
+            <View style={{ flexDirection: 'row', gap: 5 }}>
+              <Button
+                title={item.enabled ? 'Disable' : 'Enable'}
+                onPress={() => handleToggle(item.id!, item.enabled)}
+              />
+              <Button
+                title="Delete"
+                color="red"
+                onPress={() => handleDelete(item.id!)}
+              />
+            </View>
           </View>
         )}
       />
@@ -89,5 +118,5 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, marginBottom: 10 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   input: { borderWidth: 1, flex: 1, marginRight: 5, padding: 5 },
-  scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 5 },
+  scheduleRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 5, alignItems: 'center' },
 });
