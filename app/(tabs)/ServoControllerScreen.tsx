@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Button, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, Button} from 'react-native';
 import { fetchSchedules, logAudit } from '../../services/deviceService';
 import { sendServo, tareScale, fetchWeight } from '../../services/esp32Service';
 import { Schedule } from '../../types/device';
@@ -24,7 +24,7 @@ export default function ServoControlScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Optimized automatic dispense at exact minute
+  // Automatic dispense based on schedule
   useEffect(() => {
     const runScheduleCheck = async () => {
       try {
@@ -35,77 +35,47 @@ export default function ServoControlScreen() {
         for (const s of schedules) {
           if (!s.id || !s.enabled) continue;
 
+          // Only execute once per schedule per minute
           if (!lastExecutedRef.current[s.id] && s.time === currentHHMM) {
             lastExecutedRef.current[s.id] = currentHHMM;
 
-            // Open servo
-            await sendServo(s.amount);
-            setAngle(s.amount);
-            const w1 = await fetchWeight();
-            await logAudit('AUTO_DISPENSE', s.amount, w1);
+            try {
+              // Open servo
+              await sendServo(s.amount);
+              setAngle(s.amount);
+              const wOpen = await fetchWeight();
+              await logAudit('AUTO_DISPENSE', s.amount, wOpen);
 
-            // Close servo after 3s
-            (async () => {
+              // Close servo after 3 seconds
               await delay(3000);
               await sendServo(0);
               setAngle(0);
-              const w2 = await fetchWeight();
-              await logAudit('AUTO_CLOSE', 0, w2);
-            })();
+              const wClose = await fetchWeight();
+              await logAudit('AUTO_CLOSE', 0, wClose);
+            } catch (servoErr) {
+              console.error('Servo operation failed:', servoErr);
+              await logAudit('ERROR', 0, weight, `Servo operation failed: ${servoErr}`);
+            }
           }
         }
 
-        // Reset lastExecutedRef if minute has changed
+        // Reset executed flags if minute changed
         Object.keys(lastExecutedRef.current).forEach(id => {
-          if (lastExecutedRef.current[id] !== currentHHMM) {
-            delete lastExecutedRef.current[id];
-          }
+          if (lastExecutedRef.current[id] !== currentHHMM) delete lastExecutedRef.current[id];
         });
-
       } catch (err) {
         console.error('Schedule check failed', err);
+        await logAudit('ERROR', 0, weight, `Schedule check failed: ${err}`);
       }
     };
 
-    // Run check immediately and then every 5 seconds
+    // Run immediately and then every 5 seconds
     runScheduleCheck();
     const interval = setInterval(runScheduleCheck, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [weight]);
 
-  // Manual dispense
-  const handleManualDispense = async () => {
-    try {
-      await sendServo(90);
-      setAngle(90);
-      const w1 = await fetchWeight();
-      await logAudit('MANUAL_DISPENSE', 90, w1);
-
-      (async () => {
-        await delay(3000);
-        await sendServo(0);
-        setAngle(0);
-        const w2 = await fetchWeight();
-        await logAudit('MANUAL_CLOSE', 0, w2);
-      })();
-    } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'Failed to move servo manually.');
-    }
-  };
-
-  const handleClose = async () => {
-    try {
-      await sendServo(0);
-      setAngle(0);
-      const w = await fetchWeight();
-      await logAudit('MANUAL_CLOSE', 0, w);
-    } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'Failed to close servo.');
-    }
-  };
-
+  // Tare scale
   const handleTare = async () => {
     try {
       await tareScale();
@@ -114,19 +84,15 @@ export default function ServoControlScreen() {
     } catch (err) {
       console.error(err);
       Alert.alert('Error', 'Failed to tare scale.');
+      await logAudit('ERROR', 0, weight, `Tare scale failed: ${err}`);
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Food Dispenser Control</Text>
-      <Text style={styles.text}>Weight: {weight.toFixed(2)} g</Text>
+      <Text style={styles.title}>Automatic Food Dispenser</Text>
+      <Text style={styles.text}>Current Weight: {weight.toFixed(2)} g</Text>
       <Text style={styles.text}>Servo Position: {angle}°</Text>
-
-      <View style={styles.buttonRow}>
-        <Button title="CLOSE (0°)" onPress={handleClose} />
-        <Button title="DISPENSE (90°)" onPress={handleManualDispense} />
-      </View>
 
       <View style={{ marginTop: 20 }}>
         <Button title="TARE SCALE" onPress={handleTare} />
@@ -139,5 +105,4 @@ const styles = StyleSheet.create({
   container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   title: { fontSize: 26, marginBottom: 20 },
   text: { fontSize: 20, marginVertical: 10 },
-  buttonRow: { flexDirection: 'row', justifyContent: 'space-between', width: 280, marginTop: 20 },
 });
