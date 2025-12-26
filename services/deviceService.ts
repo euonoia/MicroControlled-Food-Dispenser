@@ -5,9 +5,6 @@ import { pushSchedule, toggleScheduleESP, deleteScheduleESP } from './esp32Servi
 
 const DEVICE_ID = 'feeder_001';
 
-/**
- * Ensure feeder exists
- */
 export const ensureFeederExists = async (): Promise<void> => {
   const ref = doc(db, 'devices', DEVICE_ID);
   const snapshot = await getDoc(ref);
@@ -28,9 +25,6 @@ export const ensureFeederExists = async (): Promise<void> => {
   }
 };
 
-/**
- * Fetch schedules
- */
 export const fetchSchedules = async (): Promise<Schedule[]> => {
   await ensureFeederExists();
   const schedulesRef = collection(doc(db, 'devices', DEVICE_ID), 'schedules');
@@ -41,15 +35,11 @@ export const fetchSchedules = async (): Promise<Schedule[]> => {
     .map(doc => ({ id: doc.id, ...(doc.data() as Schedule) }));
 };
 
-/**
- * Add a new schedule
- */
 export const addSchedule = async (time: string, amount: number): Promise<void> => {
   await ensureFeederExists();
   const schedulesRef = collection(doc(db, 'devices', DEVICE_ID), 'schedules');
   const docRef = await addDoc(schedulesRef, { time, amount, enabled: true } as Schedule);
 
-  // Push to ESP32
   try {
     const [hh, mm] = time.split(':');
     await pushSchedule(docRef.id, hh, mm, amount);
@@ -59,9 +49,6 @@ export const addSchedule = async (time: string, amount: number): Promise<void> =
   }
 };
 
-/**
- * Toggle schedule
- */
 export const toggleSchedule = async (id: string, enabled: boolean): Promise<void> => {
   const scheduleRef = doc(doc(db, 'devices', DEVICE_ID), `schedules/${id}`);
   await setDoc(scheduleRef, { enabled }, { merge: true });
@@ -73,9 +60,6 @@ export const toggleSchedule = async (id: string, enabled: boolean): Promise<void
   }
 };
 
-/**
- * Delete schedule
- */
 export const deleteSchedule = async (id: string): Promise<void> => {
   const scheduleRef = doc(doc(db, 'devices', DEVICE_ID), `schedules/${id}`);
   await deleteDoc(scheduleRef);
@@ -87,9 +71,6 @@ export const deleteSchedule = async (id: string): Promise<void> => {
   }
 };
 
-/**
- * Log an action to audit collection
- */
 export const logAudit = async (
   command: string,
   angle?: number,
