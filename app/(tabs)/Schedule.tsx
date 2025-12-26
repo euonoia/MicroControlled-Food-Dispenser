@@ -1,72 +1,54 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Button, FlatList, TextInput, StyleSheet, Alert } from 'react-native';
-import { fetchSchedules, logCommand } from '../../services/deviceService';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db } from '../../firebase/firebase';
+import { Schedule as ScheduleType } from '../../types/device';
+import { fetchSchedules, addSchedule, toggleSchedule } from '../../services/deviceService';
 
 export default function Schedule() {
-  const [schedules, setSchedules] = useState<{ time: string; amount: number; enabled: boolean }[]>([]);
+  const [schedules, setSchedules] = useState<ScheduleType[]>([]);
   const [timeInput, setTimeInput] = useState('');
   const [amountInput, setAmountInput] = useState('90');
 
-  const DEVICE_ID = 'feeder_001';
-
-  useEffect(() => {
-    const loadSchedules = async () => {
+  const loadSchedules = async () => {
+    try {
       const sched = await fetchSchedules();
       setSchedules(sched);
-    };
-    loadSchedules();
-  }, []);
-
-  const addSchedule = async () => {
-    if (!timeInput) return Alert.alert('Error', 'Enter time in HH:MM format');
-
-    const newSchedule = { time: timeInput, amount: parseInt(amountInput), enabled: true };
-    setSchedules([...schedules, newSchedule]);
-
-    const ref = doc(db, 'devices', DEVICE_ID);
-    await updateDoc(ref, { schedules: arrayUnion(newSchedule) });
-    await logCommand('ADD_SCHEDULE', newSchedule.amount, 0);
-    setTimeInput('');
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to load schedules');
+    }
   };
 
-  const toggleSchedule = async (index: number) => {
-    const updated = [...schedules];
-    updated[index].enabled = !updated[index].enabled;
-    setSchedules(updated);
+  useEffect(() => { loadSchedules(); }, []);
 
-    const ref = doc(db, 'devices', DEVICE_ID);
-    await updateDoc(ref, { schedules: updated });
+  const handleAdd = async () => {
+    if (!timeInput.match(/^\d{2}:\d{2}$/)) return Alert.alert('Error', 'Enter HH:MM');
+    await addSchedule(timeInput, parseInt(amountInput));
+    setTimeInput(''); setAmountInput('90');
+    loadSchedules();
+  };
+
+  const handleToggle = async (id: string, enabled: boolean) => {
+    await toggleSchedule(id, !enabled);
+    loadSchedules();
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Schedule Feeding</Text>
+
       <View style={styles.row}>
-        <TextInput
-          placeholder="HH:MM"
-          value={timeInput}
-          onChangeText={setTimeInput}
-          style={styles.input}
-        />
-        <TextInput
-          placeholder="Amount"
-          value={amountInput}
-          onChangeText={setAmountInput}
-          keyboardType="numeric"
-          style={styles.input}
-        />
-        <Button title="Add" onPress={addSchedule} />
+        <TextInput value={timeInput} onChangeText={setTimeInput} placeholder="HH:MM" style={styles.input} />
+        <TextInput value={amountInput} onChangeText={setAmountInput} placeholder="Amount" keyboardType="numeric" style={styles.input} />
+        <Button title="Add" onPress={handleAdd} />
       </View>
 
       <FlatList
         data={schedules}
-        keyExtractor={(item, idx) => idx.toString()}
-        renderItem={({ item, index }) => (
+        keyExtractor={item => item.id!}
+        renderItem={({ item }) => (
           <View style={styles.scheduleRow}>
             <Text>{item.time} - {item.amount}° - {item.enabled ? 'Active' : 'Disabled'}</Text>
-            <Button title={item.enabled ? 'Disable' : 'Enable'} onPress={() => toggleSchedule(index)} />
+            <Button title={item.enabled ? 'Disable' : 'Enable'} onPress={() => handleToggle(item.id!, item.enabled)} />
           </View>
         )}
       />
