@@ -1,86 +1,121 @@
-import axios from 'axios';
+// esp32Service.ts
+import { getDatabase, ref, set, push, remove, get, update } from "firebase/database";
+import { firebaseApp } from "../firebase/firebase"; // your initialized Firebase app
 
-export const ESP32_IP = '192.168.1.8'; // replace with your ESP32 IP
-const BASE_URL = `http://${ESP32_IP}`;
+const db = getDatabase(firebaseApp);
+const DEVICE_ID = 'feeder_001';
+const DEVICE_PATH = `/devices/${DEVICE_ID}`;
 
-/**
- * Send servo command
- */
-export const sendServo = async (angle: number) => {
-  try {
-    await axios.get(`${BASE_URL}/servo?angle=${angle}`);
-    console.log('Servo command sent:', angle);
-  } catch (err) {
-    console.error('ESP32 servo request failed:', err);
-    throw err;
-  }
-};
-
-/**
- * Tare the scale
- */
-export const tareScale = async () => {
-  try {
-    await axios.get(`${BASE_URL}/tare`);
-    console.log('Tare command sent');
-  } catch (err) {
-    console.error('ESP32 tare request failed:', err);
-    throw err;
-  }
-};
-
-/**
- * Fetch current weight
- */
+// Fetch current weight
 export const fetchWeight = async (): Promise<number> => {
   try {
-    const res = await axios.get(BASE_URL);
-    return res.data.weight ?? 0;
+    const snapshot = await get(ref(db, `${DEVICE_PATH}/currentWeight`));
+    return snapshot.exists() ? snapshot.val() : 0;
   } catch (err) {
-    console.error('ESP32 fetch weight failed:', err);
+    console.error('Failed to fetch weight:', err);
     return 0;
   }
 };
 
-/**
- * Push a new schedule to ESP32
- * id = Firestore document ID
- * hour, minute = schedule time (HH, MM)
- * angle = servo angle / amount of food
- */
-export const pushSchedule = async (id: string, hour: string, minute: string, angle: number) => {
+// Manual servo dispense
+export const dispenseServo = async (angle: number) => {
   try {
-    await axios.get(`${BASE_URL}/addSchedule?id=${id}&hour=${hour}&minute=${minute}&angle=${angle}`);
-    console.log(`Schedule pushed to ESP32: ${hour}:${minute} Angle: ${angle} ID: ${id}`);
+    await set(ref(db, `${DEVICE_PATH}/lastCommand`), { type: 'DISPENSE', angle, timestamp: Date.now() });
   } catch (err) {
-    console.error('ESP32 push schedule failed:', err);
-    throw err;
+    console.error('Failed to send dispense command:', err);
   }
 };
 
-/**
- * Toggle schedule on ESP32
- * enabled = true / false
- */
+// Tare the scale manually
+export const tareScale = async () => {
+  try {
+    await set(ref(db, `${DEVICE_PATH}/lastCommand`), { type: 'TARE', timestamp: Date.now() });
+  } catch (err) {
+    console.error('Failed to tare scale:', err);
+  }
+};
+
+// Fetch feeding schedules
+export const fetchSchedules = async () => {
+  try {
+    const snapshot = await get(ref(db, `${DEVICE_PATH}/schedules`));
+    const data = snapshot.exists() ? snapshot.val() : {};
+    return Object.keys(data)
+      .filter(key => key !== 'meta')
+      .map(key => ({ id: key, ...data[key] }));
+  } catch (err) {
+    console.error('Failed to fetch schedules:', err);
+    return [];
+  }
+};
+
+// Update a schedule
+export const updateSchedule = async (id: string, updates: any) => {
+  try {
+    await update(ref(db, `${DEVICE_PATH}/schedules/${id}`), updates);
+  } catch (err) {
+    console.error('Failed to update schedule:', err);
+  }
+};
+
+// Add new schedule
+export const addSchedule = async (timeHour: number, timeMinute: number, amount: number) => {
+  try {
+    const newRef = push(ref(db, `${DEVICE_PATH}/schedules`));
+    await set(newRef, { timeHour, timeMinute, amount, enabled: true });
+    return newRef.key;
+  } catch (err) {
+    console.error('Failed to add schedule:', err);
+  }
+};
+
+// Delete schedule
+export const deleteSchedule = async (id: string) => {
+  try {
+    await remove(ref(db, `${DEVICE_PATH}/schedules/${id}`));
+  } catch (err) {
+    console.error('Failed to delete schedule:', err);
+  }
+};
+
+// ===== NEW FUNCTIONS REQUIRED BY deviceService =====
+
+// Push schedule to ESP32
+export const pushSchedule = async (id: string, hh: string | number, mm: string | number, amount: number) => {
+  try {
+    await set(ref(db, `${DEVICE_PATH}/schedules/${id}/espCommand`), {
+      type: 'ADD',
+      hour: parseInt(hh as string),
+      minute: parseInt(mm as string),
+      amount,
+      timestamp: Date.now(),
+    });
+  } catch (err) {
+    console.error('Failed to push schedule to ESP32:', err);
+  }
+};
+
+// Toggle schedule on ESP32
 export const toggleScheduleESP = async (id: string, enabled: boolean) => {
   try {
-    await axios.get(`${BASE_URL}/toggleSchedule?id=${id}&enabled=${enabled ? 1 : 0}`);
-    console.log(`Schedule ${id} toggled on ESP32: ${enabled}`);
+    await set(ref(db, `${DEVICE_PATH}/schedules/${id}/espCommand`), {
+      type: 'TOGGLE',
+      enabled,
+      timestamp: Date.now(),
+    });
   } catch (err) {
-    console.error('ESP32 toggle schedule failed:', err);
-    throw err;
+    console.error('Failed to toggle schedule on ESP32:', err);
   }
 };
 
-/**
- * Delete schedule on ESP32
- */
+// Delete schedule on ESP32
 export const deleteScheduleESP = async (id: string) => {
   try {
-    await axios.get(`${BASE_URL}/deleteSchedule?id=${id}`);
-    console.log(`Schedule ${id} deleted on ESP32`);
+    await set(ref(db, `${DEVICE_PATH}/schedules/${id}/espCommand`), {
+      type: 'DELETE',
+      timestamp: Date.now(),
+    });
   } catch (err) {
-    console.error('ESP32 delete schedule failed:', err);
-    throw err;
+    console.error('Failed to delete schedule on ESP32:', err);
   }
 };

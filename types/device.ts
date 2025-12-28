@@ -23,4 +23,3 @@ export interface Device {
   lastUpdated?: any;         // Firestore timestamp or JS Date
   schedules?: Schedule[];    // Optional convenience field
 }
-
