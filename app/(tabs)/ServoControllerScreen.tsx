@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,19 +6,16 @@ import {
   Modal,
   ActivityIndicator,
   StyleSheet,
-  Alert
+  Alert,
 } from "react-native";
 
-import { moveServo } from "../../services/esp32Service";
-import { getDatabase, ref, onValue, get } from "firebase/database";
+import { getDatabase, ref, onValue, set, update } from "firebase/database";
 import { firebaseApp } from "../../firebase/firebase";
+import { moveServo } from "../../services/esp32Service";
 
 const db = getDatabase(firebaseApp);
 const DEVICE_ID = "feeder_001";
 
-/* =========================
-   Types
-   ========================= */
 type ConnectivityStatus = {
   online: boolean;
   lastSeen: number;
@@ -30,131 +27,81 @@ export default function ServoController() {
   const [connectivity, setConnectivity] =
     useState<ConnectivityStatus | null>(null);
 
-  /* =========================
-     Listen to ESP32 connectivity
-     ========================= */
-  useEffect(() => {
-    const connRef = ref(
-      db,
-      `/devices/${DEVICE_ID}/connectivity`
-    );
+  // Time in seconds to consider the device offline
+  const OFFLINE_THRESHOLD = 20;
 
-    const unsubscribe = onValue(connRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setConnectivity(snapshot.val());
+  useEffect(() => {
+    const connRef = ref(db, `/devices/${DEVICE_ID}/connectivity`);
+
+    const unsub = onValue(connRef, async (snap) => {
+      if (snap.exists()) {
+        const data = snap.val() as ConnectivityStatus;
+        const now = Math.floor(Date.now() / 1000);
+
+        // Check if lastSeen is older than threshold
+        let isOnline = data.online && now - data.lastSeen <= OFFLINE_THRESHOLD;
+
+        // If the device exceeded threshold and still online, mark it offline in Firebase
+        if (!isOnline && data.online) {
+          await update(connRef, { online: false });
+          isOnline = false;
+        }
+
+        setConnectivity({ ...data, online: isOnline });
       } else {
         setConnectivity(null);
       }
     });
 
-    return () => unsubscribe();
+    return unsub;
   }, []);
 
-  /* =========================
-     Wait for servo idle
-     (with timeout safety)
-     ========================= */
-  const waitForIdle = (timeoutMs = 10000) => {
-    return new Promise<void>((resolve, reject) => {
-      const servoRef = ref(db, `/devices/${DEVICE_ID}/servo`);
-
-      let unsub: (() => void) | null = null;
-
-      const timeout = setTimeout(() => {
-        if (unsub) unsub();
-        reject(new Error("Servo timeout"));
-      }, timeoutMs);
-
-      unsub = onValue(servoRef, (snapshot) => {
-        const data = snapshot.val();
-        if (!data) return;
-
-        if (data.status === "idle") {
-          clearTimeout(timeout);
-          if (unsub) unsub();
-          resolve();
-        }
-      });
-    });
-  };
-
-  /* =========================
-     Handle servo move
-     ========================= */
   const handleMove = async (angle: number) => {
-    /* 1️⃣ Connectivity validation */
-    if (
-      !connectivity ||
-      !connectivity.online ||
-      Date.now() - connectivity.lastSeen > 15000
-    ) {
-      Alert.alert(
-        "Device Offline",
-        "ESP32 is not connected. Please check power and Wi-Fi."
-      );
+    if (!connectivity?.online) {
+      Alert.alert("Device Offline", "ESP32 is not connected.");
       return;
     }
 
-    const servoRef = ref(db, `/devices/${DEVICE_ID}/servo`);
-
-    /* 2️⃣ Read current servo state */
-    const snapshot = await get(servoRef);
-    const servoState = snapshot.val();
-
-    /* 3️⃣ Prevent duplicate angle request */
-    if (servoState?.targetAngle === angle) {
-      Alert.alert(
-        "Action Not Allowed",
-        `Servo is already at ${angle}°`
-      );
+    const now = Math.floor(Date.now() / 1000);
+    if (now - connectivity.lastSeen > OFFLINE_THRESHOLD) {
+      Alert.alert("Device Timeout", "ESP32 stopped responding.");
       return;
     }
 
-    /* 4️⃣ Execute command with UI lock */
     setModalVisible(true);
 
     try {
       await moveServo(angle);
-      await waitForIdle();
     } catch (err) {
-      Alert.alert(
-        "Operation Failed",
-        "ESP32 did not respond. Please try again."
-      );
+      Alert.alert("Error", "Servo command failed.");
     } finally {
       setModalVisible(false);
     }
   };
 
-  /* =========================
-     UI
-     ========================= */
   return (
     <View style={styles.container}>
       <Text style={styles.title}>ESP32 Feeder</Text>
 
-      <Button
-        title="Dispense 0°"
-        onPress={() => handleMove(0)}
-      />
-      <View style={{ height: 10 }} />
-      <Button
-        title="Dispense 90°"
-        onPress={() => handleMove(90)}
-      />
+      <Text>
+        Status: {connectivity?.online ? "🟢 Online" : "🔴 Offline"}
+      </Text>
 
-      {/* Blocking modal */}
-      <Modal
-        transparent
-        visible={modalVisible}
-        animationType="fade"
-      >
+      {connectivity && (
+        <Text>Last Seen: {new Date(connectivity.lastSeen * 1000).toLocaleTimeString()}</Text>
+      )}
+
+      <View style={{ height: 20 }} />
+
+      <Button title="Dispense 0°" onPress={() => handleMove(0)} />
+      <View style={{ height: 10 }} />
+      <Button title="Dispense 90°" onPress={() => handleMove(90)} />
+
+      <Modal transparent visible={modalVisible}>
         <View style={styles.modalBackground}>
           <View style={styles.modalContent}>
             <ActivityIndicator size="large" />
-            <Text style={{ marginTop: 15 }}>
-              Please wait, servo moving…
-            </Text>
+            <Text>Moving servo…</Text>
           </View>
         </View>
       </Modal>
@@ -162,30 +109,18 @@ export default function ServoController() {
   );
 }
 
-/* =========================
-   Styles
-   ========================= */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  title: {
-    fontSize: 24,
-    marginBottom: 20
-  },
+  container: { flex: 1, justifyContent: "center", alignItems: "center" },
+  title: { fontSize: 24, marginBottom: 20 },
   modalBackground: {
     flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.4)"
   },
   modalContent: {
-    width: 250,
-    padding: 20,
     backgroundColor: "white",
+    padding: 20,
     borderRadius: 10,
-    alignItems: "center"
-  }
+  },
 });
