@@ -1,126 +1,72 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  Button,
-  Modal,
-  ActivityIndicator,
-  StyleSheet,
-  Alert,
-} from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, Alert, SafeAreaView } from "react-native";
 
-import { getDatabase, ref, onValue, set, update } from "firebase/database";
-import { firebaseApp } from "../../firebase/firebase";
+// Imports from our new structure
+import { useDeviceStatus } from "../../hooks/useDeviceStatus";
 import { moveServo } from "../../services/esp32Service";
+import { DEVICE_CONFIG } from "../../config/deviceConfig";
+import ConnectionBadge from "../../components/ConnectionBadge";
+import FeedButton from "../../components/FeedButton";
 
-const db = getDatabase(firebaseApp);
-const DEVICE_ID = "feeder_001";
+export default function FeederDashboard() {
+  const { status, isOnline } = useDeviceStatus();
+  const [loading, setLoading] = useState(false);
 
-type ConnectivityStatus = {
-  online: boolean;
-  lastSeen: number;
-  ip?: string;
-};
-
-export default function ServoController() {
-  const [modalVisible, setModalVisible] = useState(false);
-  const [connectivity, setConnectivity] =
-    useState<ConnectivityStatus | null>(null);
-
-  // Time in seconds to consider the device offline
-  const OFFLINE_THRESHOLD = 20;
-
-  useEffect(() => {
-    const connRef = ref(db, `/devices/${DEVICE_ID}/connectivity`);
-
-    const unsub = onValue(connRef, async (snap) => {
-      if (snap.exists()) {
-        const data = snap.val() as ConnectivityStatus;
-        const now = Math.floor(Date.now() / 1000);
-
-        // Check if lastSeen is older than threshold
-        let isOnline = data.online && now - data.lastSeen <= OFFLINE_THRESHOLD;
-
-        // If the device exceeded threshold and still online, mark it offline in Firebase
-        if (!isOnline && data.online) {
-          await update(connRef, { online: false });
-          isOnline = false;
-        }
-
-        setConnectivity({ ...data, online: isOnline });
-      } else {
-        setConnectivity(null);
-      }
-    });
-
-    return unsub;
-  }, []);
-
-  const handleMove = async (angle: number) => {
-    if (!connectivity?.online) {
-      Alert.alert("Device Offline", "ESP32 is not connected.");
+  const handleFeed = async (angle: number) => {
+    if (!isOnline) {
+      Alert.alert("Offline", "Cannot feed while device is offline.");
       return;
     }
 
-    const now = Math.floor(Date.now() / 1000);
-    if (now - connectivity.lastSeen > OFFLINE_THRESHOLD) {
-      Alert.alert("Device Timeout", "ESP32 stopped responding.");
-      return;
-    }
-
-    setModalVisible(true);
-
+    setLoading(true);
     try {
       await moveServo(angle);
-    } catch (err) {
-      Alert.alert("Error", "Servo command failed.");
+      Alert.alert("Success", "Yummy! Food dispensed.");
+    } catch (error) {
+      Alert.alert("Error", "Failed to dispense food.");
     } finally {
-      setModalVisible(false);
+      setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>ESP32 Feeder</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Text style={styles.headerTitle}>Pet Feeder 3000</Text>
 
-      <Text>
-        Status: {connectivity?.online ? "🟢 Online" : "🔴 Offline"}
-      </Text>
+        {/* 1. Status Section */}
+        <ConnectionBadge 
+          online={isOnline} 
+          lastSeen={status?.lastSeen} 
+        />
 
-      {connectivity && (
-        <Text>Last Seen: {new Date(connectivity.lastSeen * 1000).toLocaleTimeString()}</Text>
-      )}
-
-      <View style={{ height: 20 }} />
-
-      <Button title="Dispense 0°" onPress={() => handleMove(0)} />
-      <View style={{ height: 10 }} />
-      <Button title="Dispense 90°" onPress={() => handleMove(90)} />
-
-      <Modal transparent visible={modalVisible}>
-        <View style={styles.modalBackground}>
-          <View style={styles.modalContent}>
-            <ActivityIndicator size="large" />
-            <Text>Moving servo…</Text>
-          </View>
+        {/* 2. Controls Section */}
+        <View style={styles.controlsContainer}>
+          <Text style={styles.sectionLabel}>Select Portion:</Text>
+          
+          <FeedButton
+            title="Small Portion (0°)"
+            onPress={() => handleFeed(DEVICE_CONFIG.PORTIONS.SMALL)}
+            isLoading={loading}
+            disabled={!isOnline}
+          />
+          
+          <FeedButton
+            title="Large Portion (90°)"
+            onPress={() => handleFeed(DEVICE_CONFIG.PORTIONS.LARGE)}
+            isLoading={loading}
+            disabled={!isOnline}
+          />
         </View>
-      </Modal>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", alignItems: "center" },
-  title: { fontSize: 24, marginBottom: 20 },
-  modalBackground: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "white",
-    padding: 20,
-    borderRadius: 10,
-  },
+  safeArea: { flex: 1, backgroundColor: "#f7fafc" },
+  container: { flex: 1, padding: 20, alignItems: "center" },
+  headerTitle: { fontSize: 28, fontWeight: "bold", color: "#2d3748", marginBottom: 30, marginTop: 10 },
+  controlsContainer: { width: "100%", alignItems: "center", marginTop: 40 },
+  sectionLabel: { fontSize: 16, color: "#718096", marginBottom: 15 },
 });
