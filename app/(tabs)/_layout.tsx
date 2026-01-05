@@ -37,7 +37,7 @@ export default function TabLayout() {
                 : "restaurant-outline";
               break;
 
-            case "schedule":
+            case "ScheduleScreen":
               iconName = focused
                 ? "time"
                 : "time-outline";
