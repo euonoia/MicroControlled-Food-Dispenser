@@ -11,6 +11,7 @@ export const LightTheme = {
 
   success: "#2ECC71",
   danger: "#E74C3C",
+  card: "#FFFFFF",       // card / circle / panels
 };
 
 export const DarkTheme = {
@@ -26,4 +27,6 @@ export const DarkTheme = {
 
   success: "#4ADE80",
   danger: "#F87171",
+    card: "#1E293B", 
+
 };

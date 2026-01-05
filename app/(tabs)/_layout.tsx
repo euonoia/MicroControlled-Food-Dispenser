@@ -1,5 +1,5 @@
-import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { Tabs } from "expo-router";
 import { useTheme } from "../../theme/useTheme";
 
 export default function TabLayout() {
@@ -63,7 +63,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="schedule"
+        name="ScheduleScreen"
         options={{ title: "Schedule" }}
       />
 
