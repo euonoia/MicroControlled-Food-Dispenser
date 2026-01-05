@@ -1,20 +1,48 @@
 import { View, Text, StyleSheet, Switch } from "react-native";
+import { useTheme } from "../../theme/useTheme";
 import { useSchedule } from "../../hooks/useSchedule";
 import ScheduleItemCard from "../../components/ScheduleItemCard";
 
 export default function ScheduleScreen() {
-  const { enabled, items, toggleSchedule, saveItem } = useSchedule();
+  const theme = useTheme();
+  const { enabled, items, toggleSchedule, saveItem } =
+    useSchedule();
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Feeding Schedule</Text>
+    <View
+      style={[
+        styles.container,
+        { backgroundColor: theme.background },
+      ]}
+    >
+      <Text
+        style={[
+          styles.header,
+          { color: theme.text },
+        ]}
+      >
+        Feeding Schedule
+      </Text>
 
       {/* MASTER ENABLE */}
       <View style={styles.row}>
-        <Text style={styles.label}>Enable Automatic Feeding</Text>
+        <Text
+          style={[
+            styles.label,
+            { color: theme.text },
+          ]}
+        >
+          Enable Automatic Feeding
+        </Text>
+
         <Switch
           value={enabled}
-          onValueChange={(v) => toggleSchedule(v)}
+          onValueChange={toggleSchedule}
+          trackColor={{
+            false: theme.muted,
+            true: theme.secondary,
+          }}
+          thumbColor={enabled ? theme.primary : "#ccc"}
         />
       </View>
 
@@ -23,7 +51,7 @@ export default function ScheduleScreen() {
         const item = items[id] ?? {
           time: "07:00",
           angle: 45,
-          active: false
+          active: false,
         };
 
         return (
@@ -36,7 +64,7 @@ export default function ScheduleScreen() {
             onSave={(updated) =>
               saveItem(id, {
                 ...item,
-                ...updated
+                ...updated,
               })
             }
           />
@@ -47,12 +75,23 @@ export default function ScheduleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  header: { fontSize: 26, fontWeight: "bold", marginBottom: 20 },
+  container: {
+    flex: 1,
+    padding: 20,
+  },
+  header: {
+    fontSize: 26,
+    fontWeight: "700",
+    marginBottom: 20,
+  },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 20
+    alignItems: "center",
+    marginBottom: 24,
   },
-  label: { fontSize: 16 }
+  label: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
 });

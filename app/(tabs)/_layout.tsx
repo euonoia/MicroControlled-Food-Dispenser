@@ -1,19 +1,78 @@
-import {Tabs} from 'expo-router';
+import { Tabs } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../../theme/useTheme";
 
-import { StyleSheet, Text, View } from 'react-native'
-import React from 'react'
+export default function TabLayout() {
+  const theme = useTheme();
 
-export default function _layout() {
   return (
-    <Tabs>
-        <Tabs.Screen
-            name='index'
-            options={{
-                title: 'index'
-            }}  
-        />
-    </Tabs>
-  )
-}
+    <Tabs
+      screenOptions={({ route }) => ({
+        headerShown: false,
 
-const styles = StyleSheet.create({})
+        tabBarActiveTintColor: theme.secondary,
+        tabBarInactiveTintColor: theme.muted,
+
+        tabBarStyle: {
+          backgroundColor: theme.surface,
+          borderTopWidth: 0,
+          height: 64,
+          paddingBottom: 8,
+          paddingTop: 6,
+          elevation: 12,
+        },
+
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: "600",
+        },
+
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: keyof typeof Ionicons.glyphMap;
+
+          switch (route.name) {
+            case "index":
+              iconName = focused
+                ? "restaurant"
+                : "restaurant-outline";
+              break;
+
+            case "schedule":
+              iconName = focused
+                ? "time"
+                : "time-outline";
+              break;
+
+            case "settings":
+              iconName = focused
+                ? "settings"
+                : "settings-outline";
+              break;
+
+            default:
+              iconName = "ellipse";
+          }
+
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+      })}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{ title: "Feed" }}
+      />
+
+      <Tabs.Screen
+        name="schedule"
+        options={{ title: "Schedule" }}
+      />
+
+      {/*
+      <Tabs.Screen
+        name="settings"
+        options={{ title: "Settings" }}
+      />
+      */}
+    </Tabs>
+  );
+}
