@@ -1,108 +1,42 @@
-// app/(onboarding)/get-started.tsx
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  ImageBackground,
-  Dimensions,
-} from "react-native";
+// app/_layout.tsx
+import { Stack } from "expo-router";
+import { useEffect, useState } from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { router } from "expo-router";
 import { useTheme } from "../../theme/useTheme";
 
-// Import your background image
-import KobeBackground from "../../assets/images/kobe.png";
-
-const { width, height } = Dimensions.get("window");
-
-export default function GetStartedScreen() {
+export default function RootLayout() {
   const theme = useTheme();
+  const [hasStarted, setHasStarted] = useState<boolean | null>(null);
 
-  const handleStart = async () => {
-    await AsyncStorage.setItem("hasStarted", "true");
-    router.replace("/(tabs)");
-  };
+  useEffect(() => {
+    const check = async () => {
+      const value = await AsyncStorage.getItem("hasStarted");
+      setHasStarted(value === "true");
+    };
+    check();
+  }, []);
+
+  // Loading state
+  if (hasStarted === null) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
 
   return (
-    <ImageBackground
-      source={KobeBackground}
-      style={styles.background}
-      resizeMode="cover"
-    >
-      {/* Overlay for contrast */}
-      <View style={[styles.overlay, { backgroundColor: theme.background + "CC" }]}>
-        <Text style={[styles.title, { color: theme.text }]}>
-          Welcome to Pet Feeder 3000
-        </Text>
-
-        <Text style={[styles.subtitle, { color: theme.muted }]}>
-          Feed your pet anytime, anywhere.
-        </Text>
-
-        {/* Circle button */}
-        <View style={[styles.circle, { backgroundColor: theme.card }]}>
-          <Pressable
-            style={[styles.button, { backgroundColor: theme.primary }]}
-            onPress={handleStart}
-          >
-            <Text style={styles.buttonText}>Get Started</Text>
-          </Pressable>
-        </View>
-      </View>
-    </ImageBackground>
+    <Stack screenOptions={{ headerShown: false }}>
+      {hasStarted ? (
+        <Stack.Screen name="(tabs)" />         // first-time tabs user
+      ) : (
+        <Stack.Screen name="(onboarding)" />   // first-time onboarding
+      )}
+    </Stack>
   );
 }
 
-const CIRCLE_SIZE = 160;
-
 const styles = StyleSheet.create({
-  background: {
-    flex: 1,
-    width,
-    height,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  overlay: {
-    flex: 1,
-    width,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 32,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 18,
-    textAlign: "center",
-    marginBottom: 40,
-  },
-  circle: {
-    width: CIRCLE_SIZE,
-    height: CIRCLE_SIZE,
-    borderRadius: CIRCLE_SIZE / 2,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 5, // for Android shadow
-  },
-  button: {
-    paddingVertical: 16,
-    paddingHorizontal: 36,
-    borderRadius: 14,
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#fff",
-  },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
 });
