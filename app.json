@@ -1,12 +1,39 @@
 {
   "expo": {
+    "name": "microcontrolled-food-dispenser",
+    "slug": "microcontrolled-food-dispenser",
+    "version": "1.0.0",
+    "scheme": "pawfeed",
+    "platforms": ["ios", "android", "web"],
+    "android": {
+      "package": "com.kennysport.PawFeed",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "pawfeed",
+              "host": "*"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "ios": {
+      "bundleIdentifier": "com.kennysport.PawFeed",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["pawfeed"]
+          }
+        ]
+      }
+    },
     "extra": {
       "eas": {
         "projectId": "20c34a51-e658-4d96-add3-4b218fc25d3f"
       }
-    },
-    "android": {
-      "package": "com.kennysport.PawFeed"
     }
   }
 }

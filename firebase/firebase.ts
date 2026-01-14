@@ -1,9 +1,8 @@
-import Constants from "expo-constants";
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getDatabase } from "firebase/database";
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getFirestore } from 'firebase/firestore';
+import { getDatabase } from 'firebase/database';
 
-const {
+import {
   FIREBASE_API_KEY,
   FIREBASE_AUTH_DOMAIN,
   FIREBASE_DATABASE_URL,
@@ -11,7 +10,7 @@ const {
   FIREBASE_STORAGE_BUCKET,
   FIREBASE_MESSAGING_SENDER_ID,
   FIREBASE_APP_ID,
-} = Constants.manifest.extra;
+} from '@env';
 
 const firebaseConfig = {
   apiKey: FIREBASE_API_KEY,
@@ -24,7 +23,9 @@ const firebaseConfig = {
 };
 
 export const firebaseApp =
-  getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  getApps().length === 0
+    ? initializeApp(firebaseConfig)
+    : getApp();
 
 export const db = getFirestore(firebaseApp);
 export const rtdb = getDatabase(firebaseApp);
