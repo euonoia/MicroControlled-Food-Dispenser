@@ -7,12 +7,12 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../theme/useTheme";
-import { useDeviceStatus } from "../../app-example/hooks/useDeviceStatus";
+import { useDeviceStatus } from "../../hooks/useDeviceStatus";
 import { moveServo } from "../../services/esp32Service";
 import { DEVICE_CONFIG } from "../../config/deviceConfig";
 
-import ConnectionBadge from "../../app-example/components/ConnectionBadge";
-import FeedButton from "../../app-example/components/FeedButton";
+import ConnectionBadge from "../../components/ConnectionBadge";
+import FeedButton from "../../components/FeedButton";
 
 export default function IndexScreen() {
   const theme = useTheme();
