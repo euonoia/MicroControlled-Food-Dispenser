@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "20c34a51-e658-4d96-add3-4b218fc25d3f"
+      }
+    },
+    "android": {
+      "package": "com.kennysport.PawFeed"
+    }
+  }
+}
